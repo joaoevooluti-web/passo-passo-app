@@ -7,8 +7,7 @@
     input-path: main      
     # extract folder path
     output-path: main
-    
-name: Gerar APK
+    name: Gerar APK
 
 on:
   push:
