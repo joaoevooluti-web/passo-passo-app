@@ -8,32 +8,50 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # histórico completo: precisamos da data de commit de cada zip
 
-      - name: Extrair ZIP mais recente da raiz
+      - name: "Extrair o zip mais recente da pasta raiz"
         run: |
-          zip_file="$(find . -maxdepth 1 -type f -iname '*.zip' -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
-          if [ -z "$zip_file" ]; then
-            echo "Nenhum arquivo ZIP encontrado na raiz."
-            exit 1
+          newest=""; best=0
+          for f in ./*.zip; do
+            [ -e "$f" ] || continue
+            t=$(git log -1 --format=%ct -- "$f" 2>/dev/null || echo 0)
+            [ -n "$t" ] || t=0
+            if [ -z "$newest" ] || [ "$t" -ge "$best" ]; then newest="$f"; best="$t"; fi
+          done
+          if [ -n "$newest" ]; then
+            echo "Extraindo: $newest"
+            unzip -o -q "$newest" -d .
+          else
+            echo "Nenhum .zip na raiz; usando os arquivos do repositório como estão."
           fi
-          echo "Extraindo: $zip_file"
-          unzip -o -q "$zip_file" -d .
+          # acha a pasta do projeto (onde está o gradlew), na raiz ou em uma subpasta
+          g=$(find . -maxdepth 2 -name gradlew -not -path "./.git/*" | head -n 1)
+          [ -n "$g" ] || { echo "gradlew não encontrado"; exit 1; }
+          dir=$(dirname "$g")
+          echo "Projeto em: $dir"
+          echo "PROJECT_DIR=$dir" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      # O Android SDK já vem no ubuntu-latest; só aceitamos as licenças para o Gradle baixar o que faltar.
+      - name: Aceitar licenças do Android SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
-      - name: Compilar (debug, já assinado com a chave de debug e instalável)
+      - name: "Compilar (debug, já assinado com a chave de debug e instalável)"
+        working-directory: ${{ env.PROJECT_DIR }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon --stacktrace assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
           name: passo-a-passo-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
