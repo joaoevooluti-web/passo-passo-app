@@ -1,13 +1,4 @@
-- name: Zip extract
-  # You may pin to the exact commit or the version.
-  # uses: hoatruongdev09/extract-zip-github-action@dd1eb7883f2792b2baeb525abd0471439e1c6a4e
-  uses: hoatruongdev09/extract-zip-github-action@v1.2
-  with:
-    # zip file path
-    input-path: main      
-    # extract folder path
-    output-path: main
-    name: Gerar APK
+name: Gerar APK
 
 on:
   push:
@@ -17,8 +8,15 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Extrair arquivos
+        uses: hoatruongdev09/extract-zip-github-action@v1.2
+        with:
+          input-path: main
+          output-path: main
 
       - uses: actions/setup-java@v4
         with:
@@ -27,7 +25,8 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Compilar (debug, já assinado com a chave de debug e instalável)
+      - name: Compilar APK de debug
+        working-directory: main
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
@@ -35,5 +34,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: passo-a-passo-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-
+          path: main/app/build/outputs/apk/debug/app-debug.apk
